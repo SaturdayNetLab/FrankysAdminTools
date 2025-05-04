@@ -1,4 +1,4 @@
-# Franky's Admin Tool v2.5
+# Franky's Admin Tool v2.6
 
 A comprehensive PowerShell script providing a text-based menu for a variety of system administration, maintenance, repair, and diagnostic tasks on Windows.
 
