@@ -10,7 +10,6 @@ for potentially disruptive actions. Contains additional convenience features.
 This version includes a fix for the date/time display in the header.
 
 .NOTES
-Author: AI (based on your request & extensions)
 Version: 2.5 (Fixed Header)
 Date: 2025-04-10 23:30:59 (Current time for reference)
 
