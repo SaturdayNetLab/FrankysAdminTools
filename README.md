@@ -44,14 +44,14 @@ The script offers the following main menu categories with various sub-options:
 
 ## Usage
 
-1.  Download the script `FrankysAdminTool_V2.5_Fixed_EN.ps1` (or the German version `FrankysAdminTool_V2.5_Fixed.ps1`).
+1.  Download the script `FrankysAdminTool_V2.6_Fixed_EN.ps1` (or the German version `FrankysAdminTool_V2.6_Fixed.ps1`).
 2.  Open a **PowerShell console as Administrator**.
     * Right-click the Start Menu -> Windows PowerShell (Admin) or Terminal (Admin).
 3.  Navigate to the directory where you saved the script using the `cd` command.
     * Example: `cd C:\Users\YourUser\Downloads`
 4.  Execute the script:
     ```powershell
-    .\FrankysAdminTool_V2.5_Fixed_EN.ps1
+    .\FrankysAdminTool_V2.6_Fixed_EN.ps1
     ```
     *(Adjust the filename if using the German version)*
 5.  Follow the on-screen menu instructions.
