@@ -1,0 +1,490 @@
+<#
+.SYNOPSIS
+Frankys Admin Tool v2.5 - Umfangreiches Menü für Systemwartung und -diagnose.
+
+.DESCRIPTION
+Dieses Skript bietet ein textbasiertes Menü zur Ausführung zahlreicher
+Administrations-, Wartungs-, Reparatur- und Diagnoseaufgaben.
+Es muss mit Administratorrechten ausgeführt werden und enthält Warnungen
+für potenziell disruptive Aktionen. Enthält zusätzliche Komfortfunktionen.
+Diese Version enthält einen Fix für die Datums-/Uhrzeitanzeige im Header.
+
+.NOTES
+Autor: KI (basierend auf deiner Anfrage & Erweiterungen)
+Version: 2.5 (Fixed Header)
+Datum: 2025-04-10 23:30:59 (Aktuelle Zeit als Referenz)
+
+.LINK
+Keine
+
+.EXAMPLE
+.\FrankysAdminTool_V2.5_Fixed.ps1
+(Muss in einer PowerShell-Konsole ausgeführt werden, die als Administrator gestartet wurde)
+#>
+
+#region Script-Konfiguration & Globale Variablen
+# Farben für die Ausgabe
+$ColorTitle       = 'Cyan'
+$ColorMenu        = 'Yellow'
+$ColorSubMenu     = 'Green'
+$ColorWarning     = 'Red'
+$ColorSuccess     = 'Green'
+$ColorInfo        = 'White'
+$ColorInputPrompt = 'Gray'
+$ColorError       = 'Red'
+$ColorDateTime    = 'DarkGray'
+
+# Globale Variable für Admin-Check
+$Global:IsAdmin = $false
+#endregion Script-Konfiguration & Globale Variablen
+
+#region Hilfsfunktionen
+# --- Funktion zum Anzeigen des Headers (KORRIGIERTE VERSION) ---
+function Show-MenuHeader {
+    param(
+        [string]$Title = "Frankys Admin Tool v2.5"
+    )
+    Clear-Host
+    $frameWidth = 60
+    $frameLine = "=" * $frameWidth
+    $dateTimeString = Get-Date -Format "dd.MM.yyyy HH:mm:ss" # Deutsches Datumsformat
+
+    Write-Host $frameLine -ForegroundColor $ColorTitle
+
+    # Titel zentrieren
+    $padding = " " * (($frameWidth - $Title.Length) / 2)
+    $formattedTitle = "{0}{1}" -f $padding, $Title
+    Write-Host ("{0,-$frameWidth}" -f $formattedTitle) -ForegroundColor $ColorTitle
+
+    # Datum/Uhrzeit rechtsbündig mit PadLeft
+    $paddedDateTime = $dateTimeString.PadLeft($frameWidth)
+    Write-Host $paddedDateTime -ForegroundColor $ColorDateTime
+
+    Write-Host $frameLine -ForegroundColor $ColorTitle
+    Write-Host ""
+}
+
+# --- Funktion für Pausen ---
+function Pause-Script {
+    param(
+        [string]$Message = "Drücke Enter, um fortzufahren..."
+    )
+    Write-Host ""
+    Read-Host -Prompt $Message
+}
+
+# --- Funktion für Ja/Nein Bestätigungen ---
+function Get-Confirmation {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$PromptMessage,
+        [string]$WarningColor = $ColorWarning
+    )
+    while ($true) {
+        Write-Host $PromptMessage -ForegroundColor $WarningColor
+        # Eingabeaufforderung in passender Farbe
+        $choice = Read-Host -Prompt "Bestätigen mit 'Ja' oder 'Nein'"
+        if ($choice -eq 'Ja') { return $true } # Berücksichtigt Groß/Kleinschreibung
+        if ($choice -eq 'Nein') { return $false }
+        Write-Warning "Ungültige Eingabe. Bitte 'Ja' oder 'Nein' eingeben."
+    }
+}
+
+# --- Funktion zum Abfragen eines Laufwerksbuchstabens ---
+function Get-DriveLetter {
+    param(
+        [string]$PromptMessage = "Gib den Buchstaben des Laufwerks ein (z.B. C)"
+    )
+    while ($true) {
+        # Eingabeaufforderung in passender Farbe
+        $driveLetter = Read-Host -Prompt $PromptMessage
+        if ($driveLetter -match '^[a-zA-Z]$') {
+            if (Get-Volume -DriveLetter $driveLetter -ErrorAction SilentlyContinue) {
+                return $driveLetter.ToUpper()
+            } else {
+                Write-Warning "Laufwerk '$($driveLetter.ToUpper()):' wurde nicht gefunden."
+            }
+        } else {
+            Write-Warning "Ungültige Eingabe '$driveLetter'. Bitte nur einen Buchstaben eingeben."
+        }
+    }
+}
+
+# --- Funktion zum Abfragen eines Hostnamens/IP ---
+function Get-Hostname {
+     param(
+        [string]$PromptMessage = "Gib den Hostnamen oder die IP-Adresse ein (z.B. google.com oder 8.8.8.8)"
+    )
+     while ($true) {
+        # Eingabeaufforderung in passender Farbe
+        $hostname = Read-Host -Prompt $PromptMessage
+        if ($hostname -match '\S') { # Prüft, ob nicht leer
+            return $hostname
+        } else {
+            Write-Warning "Eingabe darf nicht leer sein."
+        }
+    }
+}
+#endregion Hilfsfunktionen
+
+#region Hauptlogik und Menüs
+
+# --- Admin-Rechte prüfen ---
+function Check-AdminStatus {
+    Write-Host "Prüfe auf Administratorrechte..." -ForegroundColor $ColorMenu
+    if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        Write-Warning "Dieses Skript benötigt Administratorrechte!"
+        Write-Warning "Bitte starte PowerShell als Administrator und führe das Skript erneut aus."
+        Pause-Script "Drücke Enter zum Beenden..."
+        Exit
+    }
+    Write-Host "Administratorrechte vorhanden." -ForegroundColor $ColorSuccess
+    $Global:IsAdmin = $true
+    Start-Sleep -Seconds 1
+}
+
+# --- Menü: Systeminformationen ---
+function Show-SystemInfoMenu {
+    while ($true) {
+        Show-MenuHeader -Title "Menü: Systeminformationen"
+        Write-Host "  1. Grundlegende Systeminfos anzeigen" -ForegroundColor $ColorSubMenu
+        Write-Host "  2. Netzwerkkonfiguration anzeigen" -ForegroundColor $ColorSubMenu
+        Write-Host "  3. Laufwerksübersicht anzeigen" -ForegroundColor $ColorSubMenu
+        Write-Host "  4. Laufende Prozesse anzeigen (Top 50 CPU)" -ForegroundColor $ColorSubMenu
+        Write-Host "  5. Installierte Programme anzeigen (Registry)" -ForegroundColor $ColorSubMenu
+        Write-Host "  0. Zurück zum Hauptmenü" -ForegroundColor $ColorMenu
+        Write-Host ""
+        # Eingabeaufforderung in passender Farbe
+        $wahl = Read-Host -Prompt "Wähle eine Option"
+
+        switch ($wahl) {
+            '1' {
+                Show-MenuHeader -Title "Grundlegende Systeminfos"
+                try {
+                    $compInfo = Get-ComputerInfo
+                    $userInfo = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+                    Write-Host "Betriebssystem  : $($compInfo.OsName)" -ForegroundColor $ColorInfo
+                    Write-Host "Version         : $($compInfo.OsVersion)" -ForegroundColor $ColorInfo
+                    Write-Host "Architektur     : $($compInfo.OsArchitecture)" -ForegroundColor $ColorInfo
+                    Write-Host "Computername    : $($compInfo.CsName)" -ForegroundColor $ColorInfo
+                    Write-Host "Aktueller User  : $($userInfo.Name)" -ForegroundColor $ColorInfo
+                    Write-Host "Prozessor       : $($compInfo.CsProcessors.Name | Out-String -Stream | Select-Object -First 1)" -ForegroundColor $ColorInfo
+                    Write-Host "RAM (GB)        : $([math]::Round($compInfo.CsTotalPhysicalMemory / 1GB, 2))" -ForegroundColor $ColorInfo
+                } catch { Write-Error "Fehler beim Abrufen der Systeminfos: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500 }
+                Pause-Script
+            }
+            '2' {
+                 Show-MenuHeader -Title "Netzwerkkonfiguration (Aktive Adapter)"
+                 try {
+                     Get-NetIPConfiguration | Where-Object {$_.NetAdapter.Status -eq 'Up' -and ($_.IPv4Address -ne $null -or $_.IPv6Address -ne $null)} |
+                       Select-Object InterfaceAlias, @{N='Status';E={$_.NetAdapter.Status}}, @{N='MAC';E={$_.NetAdapter.MacAddress}}, IPv4Address, IPv6Address, IPv4DefaultGateway, DNSClientServerAddress | Format-Table -AutoSize
+                 } catch { Write-Error "Fehler beim Abrufen der Netzwerkkonfiguration: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500 }
+                 Pause-Script
+            }
+            '3' {
+                 Show-MenuHeader -Title "Laufwerksübersicht"
+                 try {
+                     Get-Volume | Select-Object DriveLetter, FileSystemLabel, FileSystem, HealthStatus, @{N='Größe (GB)';E={[math]::Round($_.Size / 1GB, 2)}}, @{N='Frei (GB)';E={[math]::Round($_.SizeRemaining / 1GB, 2)}}, @{N='Frei (%)';E={ [math]::Round(($_.SizeRemaining / $_.Size * 100), 1) }} | Format-Table -AutoSize
+                 } catch { Write-Error "Fehler beim Abrufen der Laufwerksübersicht: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500 }
+                 Pause-Script
+            }
+             '4' {
+                 Show-MenuHeader -Title "Laufende Prozesse (Top 50 CPU)"
+                 try {
+                     Write-Host "Lade Prozessliste..." -ForegroundColor $ColorInfo
+                     Get-Process | Sort-Object -Property CPU -Descending | Select-Object -First 50 | Format-Table -AutoSize Name, Id, @{N='CPU(s)';E={$_.CPU}}, @{N='RAM(MB)';E={[math]::Round($_.WorkingSet64 / 1MB, 1)}}
+                 } catch { Write-Error "Fehler beim Abrufen der Prozesse: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500 }
+                 Pause-Script
+            }
+             '5' {
+                 Show-MenuHeader -Title "Installierte Programme (aus Registry)"
+                 Write-Warning "Diese Liste kann unvollständig sein (prüft HKLM 32/64bit). Laden kann dauern."
+                 try {
+                     Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*, HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* -ErrorAction SilentlyContinue |
+                       Where-Object {$_.DisplayName -ne $null -and $_.DisplayName -notmatch "Update|Hotfix|Security Intelligence"} |
+                       Select-Object DisplayName, DisplayVersion, Publisher, InstallDate | Sort-Object DisplayName | Format-Table -AutoSize
+                 } catch { Write-Error "Fehler beim Abrufen der Programme: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500 }
+                 Pause-Script
+            }
+            '0' { return } # Zurück zum Hauptmenü
+            default { Write-Warning "Ungültige Option '$wahl'." ; Start-Sleep -Seconds 2 }
+        }
+    }
+}
+
+# --- Menü: Wartung & Reparatur ---
+function Show-MaintenanceMenu {
+     while ($true) {
+        Show-MenuHeader -Title "Menü: Wartung & Reparatur"
+        Write-Host "  1. Laufwerk defragmentieren" -ForegroundColor $ColorSubMenu
+        Write-Host "  2. Datenträgerbereinigung starten (GUI)" -ForegroundColor $ColorSubMenu
+        Write-Host "  3. Systemdateien prüfen (SFC Scan)" -ForegroundColor $ColorSubMenu
+        Write-Host "  4. DISM: Image CheckHealth (Schnell)" -ForegroundColor $ColorSubMenu
+        Write-Host "  5. DISM: Image ScanHealth (Intensiv)" -ForegroundColor $ColorSubMenu
+        Write-Host "  6. DISM: Image RestoreHealth (Reparatur)" -ForegroundColor $ColorSubMenu
+        Write-Host "  7. DISM: Alle Schritte (Check, Scan, Restore)" -ForegroundColor $ColorSubMenu
+        Write-Host "  8. Laufwerk prüfen (Scan ohne Reparatur)" -ForegroundColor $ColorSubMenu
+        Write-Host "  9. Laufwerk prüfen & reparieren (CHKDSK /f) " -ForegroundColor $ColorWarning + "[Neustart evtl. nötig!]"
+        Write-Host " 10. Temporäre Dateien löschen " -ForegroundColor $ColorWarning + "[Vorsicht!]"
+        Write-Host "  0. Zurück zum Hauptmenü" -ForegroundColor $ColorMenu
+        Write-Host ""
+        # Eingabeaufforderung in passender Farbe
+        $wahl = Read-Host -Prompt "Wähle eine Option"
+
+        switch ($wahl) {
+            '1' { # Defrag
+                Show-MenuHeader -Title "Defragmentierung"
+                try {
+                    $drive = Get-DriveLetter
+                    Write-Host "Starte Defragmentierung für Laufwerk $drive`: ..." -ForegroundColor $ColorInfo
+                    Optimize-Volume -DriveLetter $drive -Defrag -Verbose
+                    Write-Host "Defragmentierung für Laufwerk $drive`: abgeschlossen." -ForegroundColor $ColorSuccess
+                } catch { Write-Error "Fehler bei der Defragmentierung: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500 }
+                Pause-Script
+            }
+            '2' { # Cleanup GUI
+                Show-MenuHeader -Title "Datenträgerbereinigung"
+                Write-Host "Starte die Windows Datenträgerbereinigung (GUI)..." -ForegroundColor $ColorInfo
+                try { Start-Process cleanmgr.exe -Wait } catch { Write-Error "Fehler: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500 }
+                Pause-Script
+            }
+            '3' { # SFC
+                Show-MenuHeader -Title "Systemdatei-Überprüfung (SFC)"
+                Write-Host "Starte 'sfc /scannow'. Dies kann einige Zeit dauern..." -ForegroundColor $ColorInfo
+                try { sfc.exe /scannow } catch { Write-Error "Fehler: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500 }
+                Write-Host "SFC Scan abgeschlossen. Überprüfe die Ausgabe oben." -ForegroundColor $ColorSuccess
+                Pause-Script
+            }
+             '4' { # DISM Check
+                Show-MenuHeader -Title "DISM CheckHealth"
+                Write-Host "Prüfe den Komponentenspeicher (schnell)..." -ForegroundColor $ColorInfo
+                try { Dism.exe /Online /Cleanup-Image /CheckHealth } catch { Write-Error "Fehler: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500 }
+                Pause-Script
+            }
+             '5' { # DISM Scan
+                Show-MenuHeader -Title "DISM ScanHealth"
+                Write-Host "Scanne den Komponentenspeicher auf Beschädigungen (dauert länger)..." -ForegroundColor $ColorInfo
+                try { Dism.exe /Online /Cleanup-Image /ScanHealth } catch { Write-Error "Fehler: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500 }
+                Pause-Script
+            }
+             '6' { # DISM Restore
+                Show-MenuHeader -Title "DISM RestoreHealth"
+                Write-Host "Versuche, den Komponentenspeicher zu reparieren (dauert lange, benötigt evtl. Internet)..." -ForegroundColor $ColorInfo
+                try { Dism.exe /Online /Cleanup-Image /RestoreHealth } catch { Write-Error "Fehler: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500 }
+                Pause-Script
+            }
+             '7' { # DISM All Steps
+                Show-MenuHeader -Title "DISM Alle Schritte"
+                Write-Host "Führe DISM CheckHealth, ScanHealth und RestoreHealth nacheinander aus." -ForegroundColor $ColorInfo
+                Write-Warning "Dies kann sehr lange dauern und benötigt ggf. Internet für RestoreHealth."
+                if (Get-Confirmation -PromptMessage "Möchtest du wirklich alle DISM-Schritte starten?") {
+                    try {
+                        Write-Host "`n--- Schritt 1: CheckHealth ---" -ForegroundColor $ColorMenu
+                        Dism.exe /Online /Cleanup-Image /CheckHealth
+                        Write-Host "`n--- Schritt 2: ScanHealth ---" -ForegroundColor $ColorMenu
+                        Dism.exe /Online /Cleanup-Image /ScanHealth
+                        Write-Host "`n--- Schritt 3: RestoreHealth ---" -ForegroundColor $ColorMenu
+                        Dism.exe /Online /Cleanup-Image /RestoreHealth
+                        Write-Host "`nAlle DISM Schritte abgeschlossen." -ForegroundColor $ColorSuccess
+                    } catch { Write-Error "Fehler während der DISM-Sequenz: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500 }
+                } else { Write-Host "DISM Sequenz abgebrochen." -ForegroundColor $ColorInfo }
+                Pause-Script
+             }
+             '8' { # Repair-Volume Scan
+                Show-MenuHeader -Title "Laufwerk prüfen (Scan)"
+                Write-Host "Dies prüft das Dateisystem auf Fehler, ohne Änderungen vorzunehmen (kein Neustart nötig)." -ForegroundColor $ColorInfo
+                try {
+                    $drive = Get-DriveLetter
+                    Write-Host "Starte Scan für Laufwerk $drive`: ..." -ForegroundColor $ColorInfo
+                    Repair-Volume -DriveLetter $drive -Scan
+                    # Repair-Volume gibt bei Erfolg nichts aus, bei Fehlern schon.
+                    if ($?) { # Prüft, ob letzter Befehl erfolgreich war
+                         Write-Host "Scan für Laufwerk $drive`: abgeschlossen. Keine Fehler gemeldet (oder Fehler wurden angezeigt)." -ForegroundColor $ColorSuccess
+                    }
+                } catch { Write-Error "Fehler beim Laufwerks-Scan: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500 }
+                Pause-Script
+             }
+            '9' { # CHKDSK /f
+                Show-MenuHeader -Title "Laufwerk prüfen & reparieren (CHKDSK)"
+                Write-Warning "CHKDSK mit /f versucht, Fehler zu reparieren."
+                Write-Warning "Wenn das Laufwerk in Benutzung ist (z.B. C:), muss der PC NEU GESTARTET werden!"
+                $drive = Get-DriveLetter
+                if (Get-Confirmation -PromptMessage "Möchtest du CHKDSK /f auf Laufwerk $drive`: wirklich ausführen?") {
+                    Write-Host "Starte 'chkdsk $drive`: /f'..." -ForegroundColor $ColorInfo
+                    try { chkdsk.exe $drive`: /f } catch { Write-Error "Fehler: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500 }
+                    Write-Host "CHKDSK wurde gestartet. Folge den Anweisungen (evtl. Neustart bestätigen)." -ForegroundColor $ColorInfo
+                } else { Write-Host "CHKDSK abgebrochen." -ForegroundColor $ColorInfo }
+                Pause-Script
+            }
+            '10' { # Temp Delete
+                Show-MenuHeader -Title "Temporäre Dateien löschen"
+                Write-Warning "Dies löscht Inhalte aus '$env:TEMP' und 'C:\Windows\Temp'."
+                Write-Warning "Schließe vorher möglichst alle Programme!"
+                if (Get-Confirmation -PromptMessage "Möchtest du die temporären Dateien wirklich löschen?") {
+                     Write-Host "Lösche Benutzer-Temp-Dateien ($env:TEMP)..." -ForegroundColor $ColorInfo
+                     try { Get-ChildItem -Path $env:TEMP -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue } catch { Write-Error "Fehler (Benutzer-Temp): $($_.Exception.Message)"; Start-Sleep -Milliseconds 500}
+                     Write-Host "Lösche Windows-Temp-Dateien (C:\Windows\Temp)..." -ForegroundColor $ColorInfo
+                     try { Get-ChildItem -Path 'C:\Windows\Temp' -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue } catch { Write-Error "Fehler (Windows-Temp): $($_.Exception.Message)"; Start-Sleep -Milliseconds 500}
+                     Write-Host "Temporäre Dateien wurden gelöscht (Fehler ignoriert, wenn Dateien in Benutzung)." -ForegroundColor $ColorSuccess
+                } else { Write-Host "Löschvorgang abgebrochen." -ForegroundColor $ColorInfo }
+                Pause-Script
+            }
+            '0' { return } # Zurück zum Hauptmenü
+            default { Write-Warning "Ungültige Option '$wahl'." ; Start-Sleep -Seconds 2 }
+        }
+    }
+}
+
+# --- Menü: Netzwerk-Tools ---
+function Show-NetworkMenu {
+     while ($true) {
+        Show-MenuHeader -Title "Menü: Netzwerk-Tools"
+        Write-Host "  1. DNS Cache leeren" -ForegroundColor $ColorSubMenu
+        Write-Host "  2. Ping senden" -ForegroundColor $ColorSubMenu
+        Write-Host "  3. Traceroute ausführen" -ForegroundColor $ColorSubMenu
+        Write-Host "  4. Öffentliche IP-Adresse anzeigen" -ForegroundColor $ColorSubMenu
+        Write-Host "  0. Zurück zum Hauptmenü" -ForegroundColor $ColorMenu
+        Write-Host ""
+        # Eingabeaufforderung in passender Farbe
+        $wahl = Read-Host -Prompt "Wähle eine Option"
+
+         switch ($wahl) {
+            '1' { # DNS Flush
+                Show-MenuHeader -Title "DNS Cache leeren"
+                Write-Host "Leere den DNS Client Cache..." -ForegroundColor $ColorInfo
+                try { Clear-DnsClientCache; Write-Host "DNS Cache geleert." -ForegroundColor $ColorSuccess } catch { Write-Error "Fehler: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500}
+                Pause-Script
+            }
+            '2' { # Ping
+                Show-MenuHeader -Title "Ping"
+                $hostToPing = Get-Hostname
+                Write-Host "Sende 4 Pings an '$hostToPing'..." -ForegroundColor $ColorInfo
+                try { Test-Connection -TargetName $hostToPing -Count 4 } catch { Write-Error "Fehler beim Pingen: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500}
+                Pause-Script
+            }
+            '3' { # Traceroute
+                 Show-MenuHeader -Title "Traceroute"
+                 $hostToTrace = Get-Hostname
+                 Write-Host "Führe Traceroute zu '$hostToTrace' aus (kann dauern)..." -ForegroundColor $ColorInfo
+                 try { Test-NetConnection -ComputerName $hostToTrace -TraceRoute } catch { Write-Error "Fehler beim Traceroute: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500}
+                 Pause-Script
+            }
+            '4' { # Public IP
+                 Show-MenuHeader -Title "Öffentliche IP-Adresse"
+                 Write-Host "Versuche, die öffentliche IP von ipinfo.io abzurufen..." -ForegroundColor $ColorInfo
+                 try {
+                     # -UseBasicParsing ist oft robuster, falls IE nicht konfiguriert ist
+                     $publicIpInfo = Invoke-RestMethod -Uri "http://ipinfo.io/json" -UseBasicParsing -TimeoutSec 10 # Timeout hinzugefügt
+                     Write-Host "Öffentliche IP : $($publicIpInfo.ip)" -ForegroundColor $ColorSuccess
+                     Write-Host "Hostname       : $($publicIpInfo.hostname)" -ForegroundColor $ColorInfo
+                     Write-Host "Standort       : $($publicIpInfo.city), $($publicIpInfo.region), $($publicIpInfo.country)" -ForegroundColor $ColorInfo
+                     Write-Host "Organisation   : $($publicIpInfo.org)" -ForegroundColor $ColorInfo
+                 } catch {
+                     Write-Error "Fehler beim Abrufen der öffentlichen IP: $($_.Exception.Message)"
+                     Write-Warning "Stelle sicher, dass eine Internetverbindung besteht und die Anfrage nicht blockiert wird."
+                     Start-Sleep -Milliseconds 500
+                 }
+                 Pause-Script
+            }
+            '0' { return } # Zurück zum Hauptmenü
+            default { Write-Warning "Ungültige Option '$wahl'." ; Start-Sleep -Seconds 2 }
+        }
+    }
+}
+
+# --- Menü: Systemsteuerung ---
+function Show-ControlMenu {
+     while ($true) {
+        Show-MenuHeader -Title "Menü: Systemsteuerung"
+        Write-Host "  1. Systemwiederherstellungspunkt erstellen" -ForegroundColor $ColorSubMenu
+        Write-Host "  2. Windows Defender Schnellscan starten" -ForegroundColor $ColorSubMenu
+        Write-Host "  3. Windows Defender Vollscan starten" -ForegroundColor $ColorSubMenu + " [Dauert lange!]"
+        Write-Host "  4. System NEUSTARTEN " -ForegroundColor $ColorWarning + "[Achtung!]"
+        Write-Host "  5. System HERUNTERFAHREN " -ForegroundColor $ColorWarning + "[Achtung!]"
+        Write-Host "  0. Zurück zum Hauptmenü" -ForegroundColor $ColorMenu
+        Write-Host ""
+        # Eingabeaufforderung in passender Farbe
+        $wahl = Read-Host -Prompt "Wähle eine Option"
+
+         switch ($wahl) {
+            '1' { # Restore Point
+                Show-MenuHeader -Title "Systemwiederherstellungspunkt erstellen"
+                $desc = "Manueller Punkt (Frankys Tool V2.5) - $(Get-Date)"
+                Write-Host "Erstelle Wiederherstellungspunkt: '$desc'" -ForegroundColor $ColorInfo
+                Write-Host "Dies kann einen Moment dauern..."
+                try { Checkpoint-Computer -Description $desc ; Write-Host "Wiederherstellungspunkt erstellt." -ForegroundColor $ColorSuccess } catch { Write-Error "Fehler: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500 }
+                Pause-Script
+            }
+            '2' { # Defender Quick Scan
+                Show-MenuHeader -Title "Defender Schnellscan"
+                Write-Host "Starte Windows Defender Schnellscan..." -ForegroundColor $ColorInfo
+                try { Start-MpScan -ScanType QuickScan; Write-Host "Schnellscan gestartet (läuft im Hintergrund)." -ForegroundColor $ColorSuccess } catch { Write-Error "Fehler beim Starten des Scans: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500}
+                Pause-Script
+            }
+            '3' { # Defender Full Scan
+                Show-MenuHeader -Title "Defender Vollscan"
+                Write-Warning "Ein Vollscan kann SEHR lange dauern!"
+                if (Get-Confirmation -PromptMessage "Möchtest du wirklich einen Vollscan starten?") {
+                    Write-Host "Starte Windows Defender Vollscan..." -ForegroundColor $ColorInfo
+                    try { Start-MpScan -ScanType FullScan; Write-Host "Vollscan gestartet (läuft im Hintergrund)." -ForegroundColor $ColorSuccess } catch { Write-Error "Fehler beim Starten des Scans: $($_.Exception.Message)"; Start-Sleep -Milliseconds 500}
+                } else { Write-Host "Vollscan abgebrochen." -ForegroundColor $ColorInfo }
+                Pause-Script
+            }
+            '4' { # Restart
+                 Show-MenuHeader -Title "System NEUSTARTEN"
+                 if (Get-Confirmation -PromptMessage "Bist du sicher, dass du den Computer JETZT NEUSTARTEN möchtest? Alle nicht gespeicherten Arbeiten gehen verloren!") {
+                     Write-Host "Computer wird in 5 Sekunden neu gestartet..." -ForegroundColor $ColorWarning
+                     Start-Sleep 5
+                     Restart-Computer -Force
+                 } else { Write-Host "Neustart abgebrochen." -ForegroundColor $ColorInfo ; Pause-Script }
+            }
+             '5' { # Shutdown
+                 Show-MenuHeader -Title "System HERUNTERFAHREN"
+                 if (Get-Confirmation -PromptMessage "Bist du sicher, dass du den Computer JETZT HERUNTERFAHREN möchtest? Alle nicht gespeicherten Arbeiten gehen verloren!") {
+                     Write-Host "Computer wird in 5 Sekunden heruntergefahren..." -ForegroundColor $ColorWarning
+                     Start-Sleep 5
+                     Stop-Computer -Force
+                 } else { Write-Host "Herunterfahren abgebrochen." -ForegroundColor $ColorInfo ; Pause-Script }
+            }
+            '0' { return } # Zurück zum Hauptmenü
+            default { Write-Warning "Ungültige Option '$wahl'." ; Start-Sleep -Seconds 2 }
+        }
+    }
+}
+
+# --- Hauptmenü ---
+function Show-MainMenu {
+    # Admin-Status einmalig prüfen
+    if (-not $Global:IsAdmin) { Check-AdminStatus }
+
+    while ($true) {
+        Show-MenuHeader
+        Write-Host "Hauptmenü:" -ForegroundColor $ColorMenu
+        Write-Host "  1. Systeminformationen" -ForegroundColor $ColorMenu
+        Write-Host "  2. Wartung & Reparatur" -ForegroundColor $ColorMenu
+        Write-Host "  3. Netzwerk-Tools" -ForegroundColor $ColorMenu
+        Write-Host "  4. Systemsteuerung" -ForegroundColor $ColorMenu
+        Write-Host "  0. Beenden" -ForegroundColor $ColorMenu
+        Write-Host ""
+        # Eingabeaufforderung in passender Farbe
+        $wahl = Read-Host -Prompt "Wähle eine Kategorie"
+
+        switch ($wahl) {
+            '1' { Show-SystemInfoMenu }
+            '2' { Show-MaintenanceMenu }
+            '3' { Show-NetworkMenu }
+            '4' { Show-ControlMenu }
+            '0' {
+                Write-Host "Frankys Admin Tool wird beendet. Auf Wiedersehen!" -ForegroundColor $ColorTitle
+                Start-Sleep -Seconds 2
+                return # Beendet die Hauptschleife und das Skript
+            }
+            default { Write-Warning "Ungültige Kategorie '$wahl'." ; Start-Sleep -Seconds 2 }
+        }
+    }
+}
+
+# --- Skriptstart ---
+Show-MainMenu
+
+#endregion Hauptlogik und Menüs
